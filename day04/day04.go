@@ -61,10 +61,9 @@ func main() {
 		}
 		for i := 0; i < wins; i++ {
 			if len(copies) < i+1 {
-				copies = append(copies, multiplier+1)
-			} else {
-				copies[i] += multiplier
+				copies = append(copies, 1)
 			}
+			copies[i] += multiplier
 		}
 
 		if len(copies) == 0 {
