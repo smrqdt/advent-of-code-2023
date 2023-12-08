@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"fmt"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -121,36 +122,87 @@ func part1() {
 	fmt.Printf("(Part 1) Minimum Location Number: %d \n", lowest)
 }
 
-type Mapping struct {
-	Dest, Source, Length int
+func part2() {
+	seeds, maps := parseInput(example)
+	fmt.Printf("Seeds: %v\n", seeds)
+	fmt.Println("Maps: ")
+	for i, mappings := range maps {
+		fmt.Printf("  Map %d: \n", i)
+		for _, mapping := range mappings {
+			fmt.Printf("    %v\n", mapping)
+		}
+	}
+	intervals := buildIntervals(seeds, maps)
+	fmt.Printf("Intervals: %v\n", intervals)
+	lowest := findLowest(intervals)
+	fmt.Printf("(Part 2) Minimum Location Number: %d \n", lowest)
 }
 
-func part2() {
+type Interval struct {
+	Begin, End int
+	Steps      []int
+}
+
+func (i Interval) String() string {
+	return fmt.Sprintf("Interval{%d:%d:%v → %d}", i.Begin, i.End, i.Steps, i.Begin+i.SumSteps())
+}
+
+func (i Interval) Contains(num int) bool {
+	return num >= i.Begin && num < i.End
+}
+
+func (i Interval) CmpToInt(b int) int {
+	if i.Begin+i.SumSteps() > b {
+		return 1
+	}
+	if i.End+i.SumSteps() > b {
+		return -1
+	}
+	return 0
+}
+
+func (i Interval) SumSteps() (sum int) {
+	for _, step := range i.Steps {
+		sum += step
+	}
+	return
+}
+
+func cmpIntervalToInt(a Interval, b int) int {
+	return a.CmpToInt(b)
+}
+
+func parseInput(input string) (seeds []Interval, maps [][]Interval) {
 	scanner := bufio.NewScanner(strings.NewReader(input))
 
 	// first line
 	scanner.Scan()
 	line := scanner.Text()
 	fields := strings.Fields(line)
-	seeds := make([]int, 0, len(fields)-1)
-	for _, field := range fields[1:] {
-		seed, err := strconv.Atoi(field)
+	for i := 1; i < len(fields); i += 2 {
+		seedStart, err := strconv.Atoi(fields[i])
 		if err != nil {
 			panic(err)
 		}
+		seedRange, err := strconv.Atoi(fields[i+1])
+		if err != nil {
+			panic(err)
+		}
+		seed := Interval{Begin: seedStart, End: seedStart + seedRange}
 		seeds = append(seeds, seed)
 	}
 	// empty line
 	scanner.Scan()
 
-	var mappings [][]Mapping
-
 	for scanner.Scan() {
 		// discard "x-to-y map:" line
 		scanner.Text()
-		var mapping []Mapping
+		var mappings []Interval
 		for scanner.Scan() {
 			line := scanner.Text()
+			if line == "" {
+				break
+			}
 			fields := strings.Fields(line)
 			row := make([]int, 3)
 			for i, field := range fields {
@@ -160,52 +212,67 @@ func part2() {
 				}
 				row[i] = num
 			}
-			mappingRow := Mapping{Dest: row[0], Source: row[1], Length: row[2]}
-			mapping = append(mapping, mappingRow)
-			if line == "" {
-				break
-			}
+			mappingRow := Interval{Begin: row[1], Steps: []int{row[0] - row[1]}, End: row[1] + row[2]}
+			mappings = append(mappings, mappingRow)
 		}
-		mappings = append(mappings, mapping)
+		maps = append(maps, mappings)
 	}
 
 	if err := scanner.Err(); err != nil {
 		panic(err)
 	}
 
-	for i := range mappings {
-		slices.SortFunc[[]Mapping](
-			mappings[i],
-			func(a, b Mapping) int {
-				return cmp.Compare[int](a.Dest, b.Dest)
-			})
-		for _, line := range mappings[i] {
-			fmt.Println(line)
-		}
-		fmt.Println()
+	for i := range maps {
+		slices.SortFunc[[]Interval](maps[i], func(a, b Interval) int { return cmp.Compare[int](a.Begin, b.Begin) })
 	}
 
-	solution := func() int {
-		for _, row := range mappings[len(mappings)-1] {
-			for location := row.Dest; location < row.Dest+row.Length; location++ {
-				source := row.Source
-				for i := len(mappings) - 2; i >= 0; i-- {
-					for _, row := range mappings[i] {
-						if source >= row.Dest && source < row.Dest+row.Length {
-							source = row.Source + (source - row.Dest)
-							break
-						}
-					}
+	return seeds, maps
+}
+
+func buildIntervals(seeds []Interval, maps [][]Interval) (intervals []*Interval) {
+	for i := range seeds {
+		intervals = append(intervals, &seeds[i])
+	}
+
+	for _, mappings := range maps {
+		for _, interval := range intervals {
+			mappingIdx, found := slices.BinarySearchFunc(mappings, interval.Begin, cmpIntervalToInt)
+			fmt.Printf("Found (%v) %v in %v at %d\n", found, interval, mappings, mappingIdx)
+			if found {
+				// interval beginn found in mappings
+				interval.Steps = append(interval.Steps, mappings[mappingIdx].Steps...)
+			} else {
+				// interval begin not included in mappings
+				interval.Steps = append(interval.Steps, 0)
+			}
+			for ; mappingIdx > len(mappings); mappingIdx++ {
+				if mappings[mappingIdx].Begin >= interval.End {
+					break
 				}
-				for i := 0; i < len(seeds)-1; i += 2 {
-					if source >= seeds[i] && source < seeds[i]+seeds[i+1] {
-						return location
-					}
-				}
+				// split interval
+				newInterval := &Interval{Begin: mappings[mappingIdx].Begin, End: interval.End, Steps: interval.Steps}
+				newInterval.Steps = append(newInterval.Steps[:len(newInterval.Steps)-1], mappings[mappingIdx].Steps...)
+				interval.End = mappings[mappingIdx].Begin
+				intervals = append(intervals, newInterval)
+				interval = newInterval
 			}
 		}
-		return -1
-	}()
+		slices.SortFunc[[]*Interval](intervals, func(a, b *Interval) int { return cmp.Compare[int](a.Begin, b.Begin) })
+	}
+	return intervals
 
-	fmt.Printf("(Part 2) Minimum Location Number: %d \n", solution)
+}
+
+func findLowest(intervals []*Interval) (lowest int) {
+	var locations []int
+	for _, interval := range intervals {
+		fmt.Println(interval)
+		for i := interval.Begin; i < interval.End; i++ {
+			fmt.Printf("%d: %v %d\n", i, interval.Steps, interval.SumSteps())
+			locations = append(locations, i+interval.SumSteps())
+		}
+	}
+	sort.Ints(locations)
+	fmt.Println(locations)
+	return locations[0]
 }
