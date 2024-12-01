@@ -12,7 +12,8 @@ var input string
 
 func main() {
 	parse()
-	part1()
+	fmt.Printf("(Part 1) Sum of lengths: %d \n", solve(2))
+	fmt.Printf("(Part 2) Sum of lengths: %d \n", solve(1000000))
 }
 
 type Galaxy struct {
@@ -59,24 +60,24 @@ func parse() {
 	}
 }
 
-func part1() {
+func solve(emptyMultiplier int) int {
 	var resultSum int
 	for i, startGalaxy := range Galaxies {
 		for _, targetGalaxy := range Galaxies[i+1:] {
-			path := findPath(startGalaxy, targetGalaxy)
+			path := findPath(startGalaxy, targetGalaxy, emptyMultiplier)
 			// fmt.Println(startGalaxy, targetGalaxy, path)
 			resultSum += path
 		}
 	}
-	fmt.Printf("(Part 1) Sum of lengths: %d \n", resultSum)
+	return resultSum
 }
 
-func findPath(start, target *Galaxy) int {
+func findPath(start, target *Galaxy, emptyMultiplier int) int {
 	var patheLen int
 	patheLen += abs(target.x - start.x)
-	patheLen += countEmpty(start.x, target.x, colHasGalaxy)
+	patheLen += countEmpty(start.x, target.x, colHasGalaxy) * (emptyMultiplier - 1)
 	patheLen += abs(target.y - start.y)
-	patheLen += countEmpty(start.y, target.y, rowHasGalaxy)
+	patheLen += countEmpty(start.y, target.y, rowHasGalaxy) * (emptyMultiplier - 1)
 	return patheLen
 }
 
