@@ -19,3 +19,7 @@
 
 # Go workspace file
 go.work
+
+# https://adventofcode.com/2023/about#faq_copying
+input
+example
